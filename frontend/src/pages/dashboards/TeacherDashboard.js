@@ -62,12 +62,12 @@ const TeacherDashboard = ({ user, onLogout }) => {
 
         <Routes>
           <Route index element={<DashboardHome stats={stats} />} />
-          <Route path="marks" element={<MarksManagement teacherUserId={user?.id || user?.userId} />} />
+          <Route path="marks" element={<MarksManagement teacherUserId={user?._id || user?.id || user?.userId} />} />
           <Route path="attendance" element={<AttendanceManagement />} />
           <Route path="homework" element={<HomeworkManagement />} />
-          <Route path="exams" element={<ExamList teacherUserId={user?.id || user?.userId} />} />
-          <Route path="remarks" element={<RemarkList teacherUserId={user?.id || user?.userId} />} />
-          <Route path="classes" element={<TeacherClasses teacherId={user?.id || user?.userId} />} />
+          <Route path="exams" element={<ExamList teacherUserId={user?._id || user?.id || user?.userId} />} />
+          <Route path="remarks" element={<RemarkList teacherUserId={user?._id || user?.id || user?.userId} />} />
+          <Route path="classes" element={<TeacherClasses teacherId={user?._id || user?.id || user?.userId} />} />
         </Routes>
       </div>
     </div>

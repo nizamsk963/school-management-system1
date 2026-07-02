@@ -64,6 +64,68 @@ const DashboardHome = ({ stats }) => {
         <p>Welcome to the School Management System. Use the navigation menu to access different modules.</p>
       </div>
 
+      {stats?.sectionSummary?.length ? (
+        <div className="card">
+          <div className="card-header">
+            <h2>🔖 Grade and Section Assignments</h2>
+          </div>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Grade</th>
+                  <th>Section</th>
+                  <th>Teacher</th>
+                  <th>Students</th>
+                  <th>Subject</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.sectionSummary.map((section) => (
+                  <tr key={`${section.grade}-${section.section}`}>
+                    <td>{section.grade}</td>
+                    <td>{section.section}</td>
+                    <td>{section.teacher}</td>
+                    <td>{section.studentCount}</td>
+                    <td>{section.subject}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {stats?.teacherSummary?.length ? (
+        <div className="card">
+          <div className="card-header">
+            <h2>👩‍🏫 Teacher Assignment Summary</h2>
+          </div>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Teacher</th>
+                  <th>Grades</th>
+                  <th>Sections</th>
+                  <th>Subjects</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.teacherSummary.map((teacher) => (
+                  <tr key={teacher.name}>
+                    <td>{teacher.name}</td>
+                    <td>{teacher.grades.length ? teacher.grades.join(', ') : '—'}</td>
+                    <td>{teacher.sections.length ? teacher.sections.join(', ') : '—'}</td>
+                    <td>{teacher.subjects}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
       <div className="card">
         <div className="card-header">
           <h2>🎯 Features</h2>

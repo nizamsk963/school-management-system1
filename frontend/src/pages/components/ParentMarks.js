@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { marksService } from '../../services/api';
+import { marksService, studentService } from '../../services/api';
 
 const ParentMarks = () => {
   const [marks, setMarks] = useState([]);
@@ -13,8 +13,18 @@ const ParentMarks = () => {
   const fetchMarks = async () => {
     try {
       setLoading(true);
-      const response = await marksService.getAll();
-      setMarks(response.data);
+      const studentResponse = await studentService.getByParent();
+      const students = studentResponse.data || [];
+      const allMarks = [];
+
+      for (const student of students) {
+        const studentId = student.userId?._id || student.userId;
+        if (!studentId) continue;
+        const response = await marksService.getByStudent(studentId);
+        allMarks.push(...(response.data || []).map((mark) => ({ ...mark, student })));
+      }
+
+      setMarks(allMarks);
     } catch (err) {
       setError('Failed to fetch marks');
       console.error(err);

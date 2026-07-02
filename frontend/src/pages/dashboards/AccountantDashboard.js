@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
-import { studentService, feeService } from '../../services/api';
+import { studentService, feeService, teacherService } from '../../services/api';
 import StudentManagement from '../components/StudentManagement';
+import AccountantTeachers from '../components/AccountantTeachers';
 import FeeManagement from '../components/FeeManagement';
 import DashboardHome from '../components/DashboardHome';
 import AccountantPendingFees from '../components/AccountantPendingFees';
@@ -18,12 +19,14 @@ const AccountantDashboard = ({ user, onLogout }) => {
 
   const fetchData = async () => {
     try {
-      const [students, fees] = await Promise.all([
+      const [students, fees, teachers] = await Promise.all([
         studentService.getAll(),
         feeService.getPending(),
+        teacherService.getAll(),
       ]);
       setStats({
         totalStudents: students.data.length,
+        totalTeachers: teachers.data.length,
         pendingFees: fees.data.length,
         totalAmount: fees.data.reduce((sum, fee) => sum + fee.amount, 0),
       });
@@ -47,6 +50,7 @@ const AccountantDashboard = ({ user, onLogout }) => {
         <ul className="nav-menu">
           <li><Link to="/dashboard" className="active">📊 Dashboard</Link></li>
           <li><Link to="/dashboard/students">👨‍🎓 Students</Link></li>
+          <li><Link to="/dashboard/teachers">👨‍🏫 Teachers</Link></li>
           <li><Link to="/dashboard/fees">💰 Fee Collection</Link></li>
           <li><Link to="/dashboard/pending">⏳ Pending Fees</Link></li>
           <li><Link to="/dashboard/payments">💳 Payments</Link></li>
@@ -66,6 +70,7 @@ const AccountantDashboard = ({ user, onLogout }) => {
         <Routes>
           <Route index element={<DashboardHome stats={stats} />} />
           <Route path="students" element={<StudentManagement />} />
+          <Route path="teachers" element={<AccountantTeachers />} />
           <Route path="fees" element={<FeeManagement />} />
           <Route path="pending" element={<AccountantPendingFees />} />
           <Route path="payments" element={<AccountantPayments />} />

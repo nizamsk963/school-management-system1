@@ -49,7 +49,12 @@ const ClassManagement = () => {
     const fallbackId = user?.userId || teacher?.userId || '';
 
     const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
-    return fullName || fallbackId || 'Unnamed teacher';
+    return fullName || fallbackId || 'No teacher assigned';
+  };
+
+  const getTeacherAssignedClassesCount = (teacher) => {
+    const assignedClasses = teacher?.assignedClasses || teacher?.userId?.assignedClasses || [];
+    return Array.isArray(assignedClasses) ? assignedClasses.length : 0;
   };
 
   const handleInputChange = (e) => {
@@ -94,9 +99,6 @@ const ClassManagement = () => {
     <div className="card">
       <div className="card-header">
         <h2>📚 Classes Management</h2>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : '➕ Add Class'}
-        </button>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -146,7 +148,7 @@ const ClassManagement = () => {
                   <option value="">Select a teacher</option>
                   {teachers.map((teacher) => (
                     <option key={teacher._id} value={teacher._id}>
-                      {getTeacherDisplayName(teacher)}
+                      {getTeacherDisplayName(teacher)}{getTeacherAssignedClassesCount(teacher) ? ` (${getTeacherAssignedClassesCount(teacher)} class${getTeacherAssignedClassesCount(teacher) > 1 ? 'es' : ''})` : ' (0 classes)'}
                     </option>
                   ))}
                 </select>
@@ -176,7 +178,7 @@ const ClassManagement = () => {
                 <td>{cls.grade}</td>
                 <td>{cls.section}</td>
                 <td>{cls.subject || 'N/A'}</td>
-                <td>{getTeacherDisplayName(cls.classTeacher)}</td>
+                <td>{getTeacherDisplayName(cls.classTeacher) || 'No teacher assigned'}</td>
                 <td>{cls.students?.length || 0}</td>
                 <td>
                   <button
@@ -190,6 +192,12 @@ const ClassManagement = () => {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div style={{ marginTop: '16px' }}>
+        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+          {showForm ? 'Cancel' : '➕ Add Class'}
+        </button>
       </div>
     </div>
   );

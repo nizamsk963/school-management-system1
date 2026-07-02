@@ -8,6 +8,9 @@ const AttendanceManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [selectedGrade, setSelectedGrade] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState('');
   const [formData, setFormData] = useState({
     student: '',
     class: '',
@@ -21,6 +24,45 @@ const AttendanceManagement = () => {
     fetchStudents();
     fetchClasses();
   }, []);
+
+  useEffect(() => {
+    if (!classes.length) {
+      setSelectedGrade('');
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+
+    const gradeOptions = [...new Set(classes.map((cls) => String(cls.grade)).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
+    if (selectedGrade && !gradeOptions.includes(String(selectedGrade))) {
+      setSelectedGrade('');
+      setSelectedSection('');
+      setSelectedClassId('');
+    }
+  }, [classes, selectedGrade]);
+
+  useEffect(() => {
+    if (!classes.length || !selectedGrade) {
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+
+    const gradeClasses = classes.filter((cls) => String(cls.grade) === String(selectedGrade));
+    const sections = [...new Set(gradeClasses.map((cls) => cls.section).filter(Boolean))].sort();
+    if (!sections.length) {
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+
+    if (!selectedSection || !sections.includes(selectedSection)) {
+      setSelectedSection('');
+    }
+
+    const matchedClass = gradeClasses.find((cls) => String(cls.section) === String(selectedSection || ''));
+    setSelectedClassId(matchedClass?._id || '');
+  }, [classes, selectedGrade, selectedSection]);
 
   const fetchAttendance = async () => {
     try {
@@ -76,16 +118,46 @@ const AttendanceManagement = () => {
     }
   };
 
+  const gradeOptions = [...new Set(classes.map((cls) => String(cls.grade)).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
+  const visibleClasses = classes.filter((cls) => String(cls.grade) === String(selectedGrade));
+  const sectionsForGrade = [...new Set(visibleClasses.map((cls) => cls.section).filter(Boolean))].sort();
+  const visibleAttendance = attendance.filter((record) => {
+    if (!selectedClassId) return true;
+    const recordClassId = record.class?._id || record.class || record.classId;
+    return String(recordClassId) === String(selectedClassId);
+  });
+
   return (
     <div className="card">
       <div className="card-header">
         <h2>✅ Attendance Management</h2>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : '➕ Mark Attendance'}
-        </button>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
+
+      <div className="form-container" style={{ marginBottom: '20px' }}>
+        <h3>Filter attendance by class</h3>
+        <div className="form-row">
+          <div className="form-group">
+            <label>Grade</label>
+            <select value={selectedGrade} onChange={(e) => setSelectedGrade(e.target.value)}>
+              <option value="">Select grade</option>
+              {gradeOptions.map((grade) => (
+                <option key={grade} value={grade}>Grade {grade}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Section</label>
+            <select value={selectedSection} onChange={(e) => setSelectedSection(e.target.value)} disabled={!sectionsForGrade.length}>
+              <option value="">Select section</option>
+              {sectionsForGrade.map((section) => (
+                <option key={section} value={section}>Section {section}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
 
       {showForm && (
         <div className="form-container" style={{ marginBottom: '30px' }}>
@@ -158,36 +230,44 @@ const AttendanceManagement = () => {
       {loading ? (
         <div className="spinner"></div>
       ) : (
-        <div className="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Student</th>
-                <th>Date</th>
-                <th>Status</th>
-                <th>Remarks</th>
-              </tr>
-            </thead>
-            <tbody>
-              {attendance.map((record) => (
-                <tr key={record._id}>
-                  <td>{record.student?.firstName} {record.student?.lastName}</td>
-                  <td>{new Date(record.date).toLocaleDateString()}</td>
-                  <td>
-                    <span style={{
-                      padding: '5px 10px',
-                      borderRadius: '3px',
-                      backgroundColor: record.status === 'Present' ? '#d1fae5' : '#fee2e2',
-                      color: record.status === 'Present' ? '#065f46' : '#991b1b',
-                    }}>
-                      {record.status}
-                    </span>
-                  </td>
-                  <td>{record.remarks || '-'}</td>
+        <div>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Remarks</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {visibleAttendance.map((record) => (
+                  <tr key={record._id}>
+                    <td>{record.student?.firstName} {record.student?.lastName}</td>
+                    <td>{new Date(record.date).toLocaleDateString()}</td>
+                    <td>
+                      <span style={{
+                        padding: '5px 10px',
+                        borderRadius: '3px',
+                        backgroundColor: record.status === 'Present' ? '#d1fae5' : '#fee2e2',
+                        color: record.status === 'Present' ? '#065f46' : '#991b1b',
+                      }}>
+                        {record.status}
+                      </span>
+                    </td>
+                    <td>{record.remarks || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ marginTop: '16px' }}>
+            <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+              {showForm ? 'Cancel' : '➕ Mark Attendance'}
+            </button>
+          </div>
         </div>
       )}
     </div>

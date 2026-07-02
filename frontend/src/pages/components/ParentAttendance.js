@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { attendanceService } from '../../services/api';
+import { attendanceService, studentService } from '../../services/api';
 
 const ParentAttendance = () => {
   const [attendance, setAttendance] = useState([]);
@@ -13,8 +13,22 @@ const ParentAttendance = () => {
   const fetchAttendance = async () => {
     try {
       setLoading(true);
-      const response = await attendanceService.getAll();
-      setAttendance(response.data);
+      const studentResponse = await studentService.getByParent();
+      const students = studentResponse.data || [];
+      const attendanceRecords = [];
+
+      for (const student of students) {
+        const studentId = student.userId?._id || student.userId;
+        if (!studentId) continue;
+        const response = await attendanceService.getByStudent(studentId);
+        const filtered = (response.data || []).map((record) => ({
+          ...record,
+          student,
+        }));
+        attendanceRecords.push(...filtered);
+      }
+
+      setAttendance(attendanceRecords);
     } catch (err) {
       setError('Failed to fetch attendance');
       console.error(err);

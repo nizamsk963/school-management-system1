@@ -14,9 +14,6 @@ const TeacherClasses = ({ teacherId }) => {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [subjects, setSubjects] = useState([]);
-  const [formData, setFormData] = useState({ grade: '', section: '', subject: '' });
 
   const fetchTeacherData = useCallback(async () => {
     if (!teacherId) {
@@ -46,10 +43,8 @@ const TeacherClasses = ({ teacherId }) => {
         return matchesAssigned || matchesOwner;
       });
 
-      const subjectsResponse = await classService.getSubjects();
       setTeacher(foundTeacher);
       setClasses(teacherClasses);
-      setSubjects(subjectsResponse.data || []);
     } catch (err) {
       setError('Failed to load teacher classes');
       console.error(err);
@@ -62,112 +57,142 @@ const TeacherClasses = ({ teacherId }) => {
     fetchTeacherData();
   }, [fetchTeacherData]);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      const payload = {
-        grade: Number(formData.grade),
-        section: formData.section.toUpperCase(),
-        classTeacher: teacher?._id || teacherId,
-        subject: formData.subject,
-      };
-
-      const response = await classService.create(payload);
-      const createdClass = response.data?.class || response.data;
-      setSuccessMessage('Class added successfully.');
-      setFormData({ grade: '', section: '', subject: '' });
-      setClasses((prev) => {
-        const next = createdClass ? [...prev, createdClass] : prev;
-        return next;
-      });
-      if (createdClass) {
-        setTeacher((prevTeacher) => prevTeacher ? {
-          ...prevTeacher,
-          assignedClasses: [...(prevTeacher.assignedClasses || []), createdClass],
-        } : prevTeacher);
-      }
-      await fetchTeacherData();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to add class');
-      console.error(err);
-    }
-  };
+  const teacherName = teacher?.userId?.firstName || teacher?.firstName || '';
+  const teacherLastName = teacher?.userId?.lastName || teacher?.lastName || '';
+  const teacherUserId = teacher?.userId?._id?.toString?.() || teacher?.userId?.toString?.() || '';
+  const teacherClasses = classes.filter((cls) => {
+    const assignedIds = (teacher?.assignedClasses || []).map((assigned) => String(assigned?._id || assigned));
+    return assignedIds.includes(String(cls._id));
+  });
+  const monitoredClasses = teacherClasses.filter((cls) => {
+    const classTeacherId = cls.classTeacher?._id?.toString?.() || cls.classTeacher?.toString?.() || '';
+    return classTeacherId === teacherUserId;
+  });
+  const taughtClasses = teacherClasses.filter((cls) => !monitoredClasses.some((monitorClass) => monitorClass._id === cls._id));
+  const sectionsResponsible = [...new Set(teacherClasses.map((cls) => cls.section).filter(Boolean))].sort();
+  const gradesResponsible = [...new Set(teacherClasses.map((cls) => cls.grade).filter(Boolean))].sort((a, b) => a - b);
+  const totalStudents = teacherClasses.reduce((total, cls) => total + ((cls.students || []).length), 0);
+  const subjectDisplay = teacher?.isAllSubjectTeacher
+    ? 'All subjects for assigned classes'
+    : (teacher?.teachingSubjects?.length
+      ? (teacher.teachingSubjects.map((subject) => subject?.name || subject).join(', '))
+      : (teacher?.subject?.name || 'N/A'));
+  const timetable = [
+    { day: 'Monday', schedule: subjectDisplay },
+    { day: 'Tuesday', schedule: subjectDisplay },
+    { day: 'Wednesday', schedule: subjectDisplay },
+    { day: 'Thursday', schedule: subjectDisplay },
+    { day: 'Friday', schedule: subjectDisplay },
+  ];
 
   return (
     <div className="card">
       <div className="card-header">
-        <h2>📚 My Classes</h2>
+        <h2>📚 Teacher Dashboard</h2>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
-      {successMessage && <div className="alert alert-success">{successMessage}</div>}
-
-      <form onSubmit={handleSubmit} style={{ marginBottom: '20px' }}>
-        <div className="form-row">
-          <div className="form-group">
-            <label>Grade</label>
-            <input type="number" name="grade" min="1" max="10" value={formData.grade} onChange={handleInputChange} required />
-          </div>
-          <div className="form-group">
-            <label>Section</label>
-            <select name="section" value={formData.section} onChange={handleInputChange} required>
-              <option value="">Select section</option>
-              <option value="A">A</option>
-              <option value="B">B</option>
-              <option value="C">C</option>
-            </select>
-          </div>
-        </div>
-        <div className="form-group">
-          <label>Subject</label>
-          <select name="subject" value={formData.subject} onChange={handleInputChange} required>
-            <option value="">Select subject</option>
-            {subjects.map((subject) => (
-              <option key={subject._id} value={subject._id}>{subject.name}</option>
-            ))}
-          </select>
-        </div>
-        <button type="submit" className="btn btn-success">Add Class</button>
-      </form>
 
       {loading ? (
         <div className="spinner"></div>
       ) : (
         <div>
-          <p><strong>{teacher?.userId?.firstName || teacher?.firstName || ''} {teacher?.userId?.lastName || teacher?.lastName || ''}</strong></p>
-          <div className="table-container">
-            <table>
+          <div className="form-container" style={{ marginBottom: '20px' }}>
+            <h3>{teacherName} {teacherLastName}</h3>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Role</label>
+                <div>{teacher?.isAllSubjectTeacher ? 'All-subject teacher (Grades 1–5)' : 'Subject specialist (Grades 6–10)'}</div>
+              </div>
+              <div className="form-group">
+                <label>Staff ID</label>
+                <div>{teacher?.userId?.userId || 'N/A'}</div>
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Assigned Grades</label>
+                <div>{gradesResponsible.length ? gradesResponsible.map((grade) => `Grade ${grade}`).join(', ') : 'No grades assigned'}</div>
+              </div>
+              <div className="form-group">
+                <label>Sections Responsible</label>
+                <div>{sectionsResponsible.length ? sectionsResponsible.map((section) => `Section ${section}`).join(', ') : 'No sections assigned'}</div>
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Assigned Classes</label>
+                <div>{teacherClasses.length ? teacherClasses.map((cls) => `Grade ${cls.grade} · Section ${cls.section}`).join(', ') : 'No classes assigned'}</div>
+              </div>
+              <div className="form-group">
+                <label>Total Students</label>
+                <div>{totalStudents}</div>
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Subjects Taught</label>
+                <div>{subjectDisplay}</div>
+              </div>
+              <div className="form-group">
+                <label>Class Teacher Status</label>
+                <div>{monitoredClasses.length ? `${monitoredClasses.length} monitored class${monitoredClasses.length > 1 ? 'es' : ''}` : 'No monitored classes'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="form-container" style={{ marginBottom: '20px' }}>
+            <h3>🏫 Monitored Classes</h3>
+            {monitoredClasses.length ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+                {monitoredClasses.map((cls) => (
+                  <div key={cls._id} className="card" style={{ padding: '12px' }}>
+                    <h4 style={{ marginTop: 0 }}>Grade {cls.grade} · Section {cls.section}</h4>
+                    <p style={{ margin: '4px 0' }}><strong>Subject:</strong> {cls.subject || 'N/A'}</p>
+                    <p style={{ margin: '4px 0' }}><strong>Role:</strong> Class Teacher</p>
+                    <p style={{ margin: '4px 0' }}><strong>Students:</strong> {(cls.students || []).length}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="alert alert-success">No class-teacher responsibilities assigned.</div>
+            )}
+          </div>
+
+          <div className="form-container" style={{ marginBottom: '20px' }}>
+            <h3>📖 Classes Taught</h3>
+            {taughtClasses.length ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+                {taughtClasses.map((cls) => (
+                  <div key={cls._id} className="card" style={{ padding: '12px' }}>
+                    <h4 style={{ marginTop: 0 }}>Grade {cls.grade} · Section {cls.section}</h4>
+                    <p style={{ margin: '4px 0' }}><strong>Subject:</strong> {cls.subject || 'N/A'}</p>
+                    <p style={{ margin: '4px 0' }}><strong>Role:</strong> Subject Teacher</p>
+                    <p style={{ margin: '4px 0' }}><strong>Students:</strong> {(cls.students || []).length}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="alert alert-success">No subject-teaching assignments beyond class monitoring.</div>
+            )}
+          </div>
+
+          <div className="form-container">
+            <h3>🕒 Timetable Overview</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th>Grade</th>
-                  <th>Section</th>
-                  <th>Subject</th>
-                  <th>Class Teacher</th>
+                  <th style={{ textAlign: 'left', padding: '10px', borderBottom: '1px solid #ddd' }}>Day</th>
+                  <th style={{ textAlign: 'left', padding: '10px', borderBottom: '1px solid #ddd' }}>Schedule</th>
                 </tr>
               </thead>
               <tbody>
-                {classes.length ? (
-                  classes.map((cls) => (
-                    <tr key={cls._id}>
-                      <td>{cls.grade}</td>
-                      <td>{cls.section}</td>
-                      <td>{cls.subject?.name || 'N/A'}</td>
-                      <td>{cls.classTeacher ? `${cls.classTeacher.firstName || ''} ${cls.classTeacher.lastName || ''}`.trim() : 'N/A'}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="4">No classes found.</td>
+                {timetable.map((row) => (
+                  <tr key={row.day}>
+                    <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{row.day}</td>
+                    <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{row.schedule}</td>
                   </tr>
-                )}
+                ))}
               </tbody>
             </table>
           </div>

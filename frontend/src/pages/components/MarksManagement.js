@@ -12,6 +12,9 @@ const MarksManagement = ({ teacherUserId }) => {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [selectedGrade, setSelectedGrade] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState('');
   const [formData, setFormData] = useState({
     student: '',
     subject: '',
@@ -33,10 +36,44 @@ const MarksManagement = ({ teacherUserId }) => {
     fetchStudents();
     fetchClasses();
 
-    if (parsedUser?.id || parsedUser?.userId || teacherUserId) {
-      fetchTeacherProfile(parsedUser?.id || parsedUser?.userId || teacherUserId);
+    const isTeacher = parsedUser?.role === 'teacher' || Boolean(teacherUserId);
+    const teacherId = teacherUserId || parsedUser?._id || parsedUser?.id || parsedUser?.userId;
+    if (isTeacher && teacherId) {
+      fetchTeacherProfile(teacherId);
     }
   }, [teacherUserId]);
+
+  useEffect(() => {
+    if (!classes.length) {
+      setSelectedGrade('');
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+  }, [classes]);
+
+  useEffect(() => {
+    if (!classes.length || !selectedGrade) {
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+
+    const gradeClasses = classes.filter((cls) => String(cls.grade) === String(selectedGrade));
+    const sections = [...new Set(gradeClasses.map((cls) => cls.section).filter(Boolean))].sort();
+    if (!sections.length) {
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+
+    if (!selectedSection || !sections.includes(selectedSection)) {
+      setSelectedSection('');
+    }
+
+    const matchedClass = gradeClasses.find((cls) => String(cls.section) === String(selectedSection || ''));
+    setSelectedClassId(matchedClass?._id || '');
+  }, [classes, selectedGrade, selectedSection]);
 
   const fetchMarks = async () => {
     try {
@@ -58,15 +95,8 @@ const MarksManagement = ({ teacherUserId }) => {
 
   const fetchTeacherProfile = async (userId) => {
     try {
-      const response = await teacherService.getAll();
-      const teachers = response.data || [];
-      const foundTeacher = teachers.find((teacher) => {
-        const teacherUser = teacher.userId;
-        const teacherUserId = teacherUser?._id?.toString?.() || teacherUser?.toString?.();
-        const teacherLoginId = teacherUser?.userId;
-        const normalizedUserId = userId?.toString?.() || userId;
-        return teacherUserId === normalizedUserId || teacherUser === normalizedUserId || teacherLoginId === normalizedUserId;
-      });
+      const response = await teacherService.getByUserId(userId);
+      const foundTeacher = response.data;
 
       if (foundTeacher?.assignedClasses?.length) {
         const assignedClassIds = new Set(foundTeacher.assignedClasses.map((cls) => getId(cls)));
@@ -81,11 +111,17 @@ const MarksManagement = ({ teacherUserId }) => {
         const filteredClasses = (responseClasses.data || []).filter((cls) => assignedClassIds.has(getId(cls)));
         setClasses(filteredClasses);
       } else {
-        setStudents([]);
-        setClasses([]);
+        const responseStudents = await studentService.getAll();
+        setStudents(responseStudents.data || []);
+
+        const responseClasses = await classService.getAll();
+        setClasses(responseClasses.data || []);
       }
     } catch (err) {
       console.error('Failed to fetch teacher profile:', err);
+      if (err.response?.status === 401) {
+        setError('Unauthorized: please log in again.');
+      }
     }
   };
 
@@ -118,7 +154,7 @@ const MarksManagement = ({ teacherUserId }) => {
 
   const handleAddMarks = async (e) => {
     e.preventDefault();
-    if (!currentUser?.id) {
+    if (!currentUser?.id && !currentUser?._id && !currentUser?.userId) {
       setError('Could not determine current user. Please log in again.');
       return;
     }
@@ -126,7 +162,7 @@ const MarksManagement = ({ teacherUserId }) => {
     try {
       await marksService.add({
         ...formData,
-        teacher: currentUser.id || currentUser.userId,
+        teacher: currentUser._id || currentUser.id || currentUser.userId,
       });
       setFormData({
         student: '',
@@ -145,6 +181,17 @@ const MarksManagement = ({ teacherUserId }) => {
     }
   };
 
+  const gradeOptions = Array.from({ length: 10 }, (_, index) => String(index + 1));
+  const visibleClasses = selectedGrade
+    ? classes.filter((cls) => String(cls.grade) === String(selectedGrade))
+    : classes;
+  const sectionsForGrade = [...new Set(visibleClasses.map((cls) => cls.section).filter(Boolean))].sort();
+  const visibleMarks = marks.filter((mark) => {
+    if (!selectedClassId) return true;
+    const markClassId = mark.class?._id || mark.class || mark.classId;
+    return String(markClassId) === String(selectedClassId);
+  });
+
   return (
     <div className="card">
       <div className="card-header">
@@ -155,6 +202,30 @@ const MarksManagement = ({ teacherUserId }) => {
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
+
+      <div className="form-container" style={{ marginBottom: '20px' }}>
+        <h3>Filter marks by class</h3>
+        <div className="form-row">
+          <div className="form-group">
+            <label>Grade</label>
+            <select value={selectedGrade} onChange={(e) => setSelectedGrade(e.target.value)}>
+              <option value="">Select grade</option>
+              {gradeOptions.map((grade) => (
+                <option key={grade} value={grade}>Grade {grade}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Section</label>
+            <select value={selectedSection} onChange={(e) => setSelectedSection(e.target.value)} disabled={!sectionsForGrade.length}>
+              <option value="">Select section</option>
+              {sectionsForGrade.map((section) => (
+                <option key={section} value={section}>Section {section}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
 
       {showForm && (
         <div className="form-container" style={{ marginBottom: '30px' }}>
@@ -245,6 +316,7 @@ const MarksManagement = ({ teacherUserId }) => {
             <thead>
               <tr>
                 <th>Student</th>
+                <th>Class</th>
                 <th>Subject</th>
                 <th>Marks</th>
                 <th>Exam Type</th>
@@ -252,15 +324,24 @@ const MarksManagement = ({ teacherUserId }) => {
               </tr>
             </thead>
             <tbody>
-              {marks.map((mark) => (
-                <tr key={mark._id}>
-                  <td>{mark.student?.firstName} {mark.student?.lastName}</td>
-                  <td>{mark.subject?.name}</td>
-                  <td>{mark.marks}</td>
-                  <td>{mark.examType}</td>
-                  <td>{new Date(mark.examDate).toLocaleDateString()}</td>
-                </tr>
-              ))}
+              {visibleMarks.map((mark) => {
+                const studentName = mark.student?.firstName
+                  ? `${mark.student.firstName} ${mark.student.lastName}`
+                  : mark.student?.userId
+                  ? `${mark.student.userId.firstName || ''} ${mark.student.userId.lastName || ''}`.trim()
+                  : 'N/A';
+
+                return (
+                  <tr key={mark._id}>
+                    <td>{studentName || 'N/A'}</td>
+                    <td>{mark.class ? `Grade ${mark.class.grade} - Section ${mark.class.section}` : 'N/A'}</td>
+                    <td>{mark.subject?.name || mark.subject || 'N/A'}</td>
+                    <td>{mark.marks}</td>
+                    <td>{mark.examType}</td>
+                    <td>{mark.examDate ? new Date(mark.examDate).toLocaleDateString() : 'N/A'}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

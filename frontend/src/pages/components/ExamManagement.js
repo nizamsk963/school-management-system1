@@ -8,6 +8,9 @@ const ExamManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [selectedGrade, setSelectedGrade] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     class: '',
@@ -25,6 +28,45 @@ const ExamManagement = () => {
     fetchClasses();
     fetchSubjects();
   }, []);
+
+  useEffect(() => {
+    if (!classes.length) {
+      setSelectedGrade('');
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+
+    const gradeOptions = [...new Set(classes.map((cls) => String(cls.grade)).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
+    if (selectedGrade && !gradeOptions.includes(String(selectedGrade))) {
+      setSelectedGrade('');
+      setSelectedSection('');
+      setSelectedClassId('');
+    }
+  }, [classes, selectedGrade]);
+
+  useEffect(() => {
+    if (!classes.length || !selectedGrade) {
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+
+    const gradeClasses = classes.filter((cls) => String(cls.grade) === String(selectedGrade));
+    const sections = [...new Set(gradeClasses.map((cls) => cls.section).filter(Boolean))].sort();
+    if (!sections.length) {
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+
+    if (!selectedSection || !sections.includes(selectedSection)) {
+      setSelectedSection('');
+    }
+
+    const matchedClass = gradeClasses.find((cls) => String(cls.section) === String(selectedSection || ''));
+    setSelectedClassId(matchedClass?._id || '');
+  }, [classes, selectedGrade, selectedSection]);
 
   const fetchExams = async () => {
     try {
@@ -95,18 +137,48 @@ const ExamManagement = () => {
     }
   };
 
+  const gradeOptions = [...new Set(classes.map((cls) => String(cls.grade)).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
+  const visibleClasses = classes.filter((cls) => String(cls.grade) === String(selectedGrade));
+  const sectionsForGrade = [...new Set(visibleClasses.map((cls) => cls.section).filter(Boolean))].sort();
+  const visibleExams = exams.filter((exam) => {
+    if (!selectedClassId) return true;
+    const examClassId = exam.class?._id || exam.class || exam.classId;
+    return String(examClassId) === String(selectedClassId);
+  });
+
   if (loading) return <div className="loading-spinner"></div>;
 
   return (
     <div className="card">
       <div className="card-header">
         <h2>📋 Exams Management</h2>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : '➕ Add Exam'}
-        </button>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
+
+      <div className="form-container" style={{ marginBottom: '20px' }}>
+        <h3>Filter exams by class</h3>
+        <div className="form-row">
+          <div className="form-group">
+            <label>Grade</label>
+            <select value={selectedGrade} onChange={(e) => setSelectedGrade(e.target.value)}>
+              <option value="">Select grade</option>
+              {gradeOptions.map((grade) => (
+                <option key={grade} value={grade}>Grade {grade}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Section</label>
+            <select value={selectedSection} onChange={(e) => setSelectedSection(e.target.value)} disabled={!sectionsForGrade.length}>
+              <option value="">Select section</option>
+              {sectionsForGrade.map((section) => (
+                <option key={section} value={section}>Section {section}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
 
       {showForm && (
         <div className="form-container" style={{ marginBottom: '30px' }}>
@@ -238,7 +310,7 @@ const ExamManagement = () => {
             </tr>
           </thead>
           <tbody>
-            {exams.map((exam) => (
+            {visibleExams.map((exam) => (
               <tr key={exam._id}>
                 <td>{exam.name}</td>
                 <td>Grade {exam.class?.grade} - {exam.class?.section}</td>
@@ -259,6 +331,12 @@ const ExamManagement = () => {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div style={{ marginTop: '16px' }}>
+        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+          {showForm ? 'Cancel' : '➕ Add Exam'}
+        </button>
       </div>
     </div>
   );

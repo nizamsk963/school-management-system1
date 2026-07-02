@@ -23,7 +23,9 @@ export const authService = {
 
 export const studentService = {
   getAll: () => api.get('/students'),
+  getByParent: () => api.get('/students/parent'),
   getById: (id) => api.get(`/students/${id}`),
+  getByUserId: (userId) => api.get(`/students/user/${userId}`),
   add: (data) => api.post('/students', data),
   update: (id, data) => api.put(`/students/${id}`, data),
   delete: (id) => api.delete(`/students/${id}`),
@@ -33,6 +35,7 @@ export const studentService = {
 export const teacherService = {
   getAll: () => api.get('/teachers'),
   getById: (id) => api.get(`/teachers/${id}`),
+  getByUserId: (userId) => api.get(`/teachers/user/${userId}`),
   add: (data) => api.post('/teachers', data),
   update: (id, data) => api.put(`/teachers/${id}`, data),
   delete: (id) => api.delete(`/teachers/${id}`),
@@ -61,9 +64,12 @@ export const homeworkService = {
   getAll: () => api.get('/homework'),
   getByClass: (classId) => api.get(`/homework/class/${classId}`),
   getBySubject: (subjectId) => api.get(`/homework/subject/${subjectId}`),
+  getByStudent: (studentId) => api.get(`/homework/student/${studentId}`),
   add: (data) => api.post('/homework', data),
   update: (id, data) => api.put(`/homework/${id}`, data),
   delete: (id) => api.delete(`/homework/${id}`),
+  submit: (id, data) => api.post(`/homework/${id}/submit`, data),
+  review: (id, data) => api.put(`/homework/${id}/review`, data),
 };
 
 export const remarkService = {
@@ -94,6 +100,7 @@ export const eventService = {
 
 export const feeService = {
   getAll: () => api.get('/fees'),
+  getByParent: () => api.get('/fees/parent'),
   getByStudent: (studentId) => api.get(`/fees/student/${studentId}`),
   getPending: () => api.get('/fees/pending'),
   add: (data) => api.post('/fees', data),

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Event = require('../models/Event');
 
 const getEvents = async (req, res) => {
@@ -25,9 +26,29 @@ const getEventById = async (req, res) => {
   }
 };
 
+const sanitizeEventBody = (body) => {
+  const payload = { ...body };
+
+  if (payload.organizer && typeof payload.organizer === 'string' && payload.organizer.trim() === '') {
+    delete payload.organizer;
+  }
+
+  if (payload.organizer && !mongoose.Types.ObjectId.isValid(payload.organizer)) {
+    throw new Error('Organizer must be a valid user ID.');
+  }
+
+  if (payload.attendees && Array.isArray(payload.attendees)) {
+    payload.attendees = payload.attendees.filter((attendee) => attendee && attendee.toString().trim() !== '');
+    payload.attendees = payload.attendees.filter((attendee) => mongoose.Types.ObjectId.isValid(attendee));
+  }
+
+  return payload;
+};
+
 const addEvent = async (req, res) => {
   try {
-    const event = new Event(req.body);
+    const payload = sanitizeEventBody(req.body);
+    const event = new Event(payload);
     await event.save();
 
     const populatedEvent = await Event.findById(event._id);
@@ -42,7 +63,8 @@ const addEvent = async (req, res) => {
 
 const updateEvent = async (req, res) => {
   try {
-    const event = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true })
+    const payload = sanitizeEventBody(req.body);
+    const event = await Event.findByIdAndUpdate(req.params.id, payload, { new: true })
       .populate('organizer')
       .populate('attendees');
     res.json(event);

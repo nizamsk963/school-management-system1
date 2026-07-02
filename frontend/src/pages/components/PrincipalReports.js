@@ -27,7 +27,17 @@ const PrincipalReports = () => {
           paidAmount: paidFees.reduce((sum, fee) => sum + fee.amount, 0),
         });
       } catch (err) {
-        setError('Failed to load report data');
+        const status = err?.response?.status;
+        if (status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setError('Your session has expired. Please log in again.');
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1000);
+        } else {
+          setError('Failed to load report data');
+        }
         console.error(err);
       } finally {
         setLoading(false);

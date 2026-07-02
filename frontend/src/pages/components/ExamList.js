@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { examService, teacherService, classService } from '../../services/api';
+import { examService, teacherService, classService, studentService } from '../../services/api';
 
 const getId = (value) => value?._id?.toString?.() || value?.toString?.() || '';
 
-const ExamList = ({ title = 'Exams', teacherUserId }) => {
+const ExamList = ({ title = 'Exams', teacherUserId, studentId, showActions = true }) => {
   const [exams, setExams] = useState([]);
   const [classes, setClasses] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -77,6 +77,15 @@ const ExamList = ({ title = 'Exams', teacherUserId }) => {
           const classIds = teacher.assignedClasses.map((cls) => getId(cls));
           examsData = examsData.filter((exam) => classIds.includes(getId(exam.class)));
         }
+      } else if (studentId) {
+        try {
+          const studentResponse = await studentService.getByUserId(studentId);
+          const student = studentResponse.data;
+          const studentClassId = getId(student.class);
+          examsData = examsData.filter((exam) => getId(exam.class) === studentClassId);
+        } catch (err) {
+          console.warn('Failed to resolve student class for exams:', err);
+        }
       }
 
       setExams(examsData);
@@ -86,12 +95,12 @@ const ExamList = ({ title = 'Exams', teacherUserId }) => {
     } finally {
       setLoading(false);
     }
-  }, [teacherUserId]);
+  }, [teacherUserId, studentId]);
 
   useEffect(() => {
     fetchExams();
     fetchTeacherData();
-  }, [teacherUserId, fetchExams, fetchTeacherData]);
+  }, [teacherUserId, studentId, fetchExams, fetchTeacherData]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -167,18 +176,12 @@ const ExamList = ({ title = 'Exams', teacherUserId }) => {
     <div className="card">
       <div className="card-header">
         <h2>📋 {title}</h2>
-        <button className="btn btn-primary" onClick={() => {
-          if (showForm) resetForm();
-          else setShowForm(true);
-        }}>
-          {showForm ? 'Cancel' : '➕ Add Exam'}
-        </button>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
       {successMessage && <div className="alert alert-success">{successMessage}</div>}
 
-      {showForm && (
+      {showActions && showForm && (
         <div className="form-container" style={{ marginBottom: '20px' }}>
           <h3>{editingId ? 'Edit Exam' : 'Add New Exam'}</h3>
           <form onSubmit={handleSubmit}>
@@ -260,13 +263,13 @@ const ExamList = ({ title = 'Exams', teacherUserId }) => {
                 <th>Time</th>
                 <th>Total Marks</th>
                 <th>Room</th>
-                <th>Actions</th>
+                {showActions && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
               {exams.length === 0 ? (
                 <tr>
-                  <td colSpan="8">No exams found.</td>
+                  <td colSpan={showActions ? 8 : 7}>No exams found.</td>
                 </tr>
               ) : (
                 exams.map((exam) => (
@@ -278,15 +281,30 @@ const ExamList = ({ title = 'Exams', teacherUserId }) => {
                     <td>{exam.startTime ? `${exam.startTime} - ${exam.endTime}` : '-'}</td>
                     <td>{exam.totalMarks}</td>
                     <td>{exam.room || '-'}</td>
-                    <td>
-                      <button className="btn btn-sm btn-primary" onClick={() => handleEdit(exam)}>Edit</button>{' '}
-                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(exam._id)}>Delete</button>
-                    </td>
+                    {showActions && (
+                      <td>
+                        <>
+                          <button className="btn btn-sm btn-primary" onClick={() => handleEdit(exam)}>Edit</button>{' '}
+                          <button className="btn btn-sm btn-danger" onClick={() => handleDelete(exam._id)}>Delete</button>
+                        </>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {showActions && (
+        <div style={{ marginTop: '16px' }}>
+          <button className="btn btn-primary" onClick={() => {
+            if (showForm) resetForm();
+            else setShowForm(true);
+          }}>
+            {showForm ? 'Cancel' : '➕ Add Exam'}
+          </button>
         </div>
       )}
     </div>

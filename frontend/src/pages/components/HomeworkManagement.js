@@ -9,6 +9,9 @@ const HomeworkManagement = () => {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [selectedGrade, setSelectedGrade] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -16,6 +19,13 @@ const HomeworkManagement = () => {
     subject: '',
     dueDate: '',
   });
+  const [selectedHomework, setSelectedHomework] = useState(null);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [reviewData, setReviewData] = useState({
+    status: 'Reviewed',
+    teacherFeedback: '',
+  });
+  const [reviewSuccess, setReviewSuccess] = useState('');
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -26,6 +36,45 @@ const HomeworkManagement = () => {
     fetchClasses();
     fetchSubjects();
   }, []);
+
+  useEffect(() => {
+    if (!classes.length) {
+      setSelectedGrade('');
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+
+    const gradeOptions = [...new Set(classes.map((cls) => String(cls.grade)).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
+    if (selectedGrade && !gradeOptions.includes(String(selectedGrade))) {
+      setSelectedGrade('');
+      setSelectedSection('');
+      setSelectedClassId('');
+    }
+  }, [classes, selectedGrade]);
+
+  useEffect(() => {
+    if (!classes.length || !selectedGrade) {
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+
+    const gradeClasses = classes.filter((cls) => String(cls.grade) === String(selectedGrade));
+    const sections = [...new Set(gradeClasses.map((cls) => cls.section).filter(Boolean))].sort();
+    if (!sections.length) {
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+
+    if (!selectedSection || !sections.includes(selectedSection)) {
+      setSelectedSection('');
+    }
+
+    const matchedClass = gradeClasses.find((cls) => String(cls.section) === String(selectedSection || ''));
+    setSelectedClassId(matchedClass?._id || '');
+  }, [classes, selectedGrade, selectedSection]);
 
   const fetchHomework = async () => {
     try {
@@ -63,9 +112,58 @@ const HomeworkManagement = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleSelectHomework = (hw) => {
+    setSelectedHomework(hw);
+    setSelectedSubmission(null);
+    setReviewData({ status: 'Reviewed', teacherFeedback: '' });
+    setReviewSuccess('');
+  };
+
+  const handleSelectSubmission = (submission) => {
+    setSelectedSubmission(submission);
+    setReviewData({
+      status: submission.status || 'Reviewed',
+      teacherFeedback: submission.teacherFeedback || '',
+    });
+    setReviewSuccess('');
+  };
+
+  const handleReviewChange = (e) => {
+    const { name, value } = e.target;
+    setReviewData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!selectedHomework || !selectedSubmission) {
+      setError('Please select a homework submission to review.');
+      return;
+    }
+    try {
+      await homeworkService.review(selectedHomework._id, {
+        submissionId: selectedSubmission._id,
+        status: reviewData.status,
+        teacherFeedback: reviewData.teacherFeedback,
+      });
+      setReviewSuccess('Submission reviewed successfully.');
+      setError('');
+      const refreshed = await homeworkService.getAll();
+      setHomework(refreshed.data);
+      const updatedHomework = refreshed.data.find((hw) => hw._id === selectedHomework._id);
+      setSelectedHomework(updatedHomework || null);
+      if (updatedHomework) {
+        const updatedSubmission = updatedHomework.submissions.find((sub) => sub._id === selectedSubmission._id);
+        setSelectedSubmission(updatedSubmission || null);
+      }
+    } catch (err) {
+      setError('Failed to review submission: ' + (err.response?.data?.message || 'Unknown error'));
+      console.error(err);
+    }
+  };
+
   const handleAddHomework = async (e) => {
     e.preventDefault();
-    if (!currentUser?.id) {
+    if (!currentUser?.id && !currentUser?.userId) {
       setError('Could not determine current user. Please log in again.');
       return;
     }
@@ -73,7 +171,7 @@ const HomeworkManagement = () => {
     try {
       const data = {
         ...formData,
-        teacher: currentUser.id,
+        teacher: currentUser.id || currentUser.userId,
       };
       await homeworkService.add(data);
       setFormData({
@@ -92,6 +190,15 @@ const HomeworkManagement = () => {
     }
   };
 
+  const gradeOptions = [...new Set(classes.map((cls) => String(cls.grade)).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
+  const visibleClasses = classes.filter((cls) => String(cls.grade) === String(selectedGrade));
+  const sectionsForGrade = [...new Set(visibleClasses.map((cls) => cls.section).filter(Boolean))].sort();
+  const visibleHomework = homework.filter((hw) => {
+    if (!selectedClassId) return true;
+    const hwClassId = hw.class?._id || hw.class || hw.classId;
+    return String(hwClassId) === String(selectedClassId);
+  });
+
   return (
     <div className="card">
       <div className="card-header">
@@ -102,6 +209,30 @@ const HomeworkManagement = () => {
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
+
+      <div className="form-container" style={{ marginBottom: '20px' }}>
+        <h3>Filter homework by class</h3>
+        <div className="form-row">
+          <div className="form-group">
+            <label>Grade</label>
+            <select value={selectedGrade} onChange={(e) => setSelectedGrade(e.target.value)}>
+              <option value="">Select grade</option>
+              {gradeOptions.map((grade) => (
+                <option key={grade} value={grade}>Grade {grade}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Section</label>
+            <select value={selectedSection} onChange={(e) => setSelectedSection(e.target.value)} disabled={!sectionsForGrade.length}>
+              <option value="">Select section</option>
+              {sectionsForGrade.map((section) => (
+                <option key={section} value={section}>Section {section}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
 
       {showForm && (
         <div className="form-container" style={{ marginBottom: '30px' }}>
@@ -188,7 +319,8 @@ const HomeworkManagement = () => {
       {loading ? (
         <div className="spinner"></div>
       ) : (
-        <div className="table-container">
+        <>
+          <div className="table-container">
           <table>
             <thead>
               <tr>
@@ -196,20 +328,95 @@ const HomeworkManagement = () => {
                 <th>Description</th>
                 <th>Assigned Date</th>
                 <th>Due Date</th>
+                <th>Submissions</th>
               </tr>
             </thead>
             <tbody>
-              {homework.map((hw) => (
+              {visibleHomework.map((hw) => (
                 <tr key={hw._id}>
                   <td><strong>{hw.title}</strong></td>
                   <td>{hw.description}</td>
                   <td>{new Date(hw.assignedDate).toLocaleDateString()}</td>
                   <td>{new Date(hw.dueDate).toLocaleDateString()}</td>
+                  <td>
+                    <div>{hw.submissions?.length || 0} submission(s)</div>
+                    {hw.submissions?.length > 0 && (
+                      <button className="btn btn-sm btn-secondary" type="button" onClick={() => handleSelectHomework(hw)}>
+                        Review Submissions
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+          {selectedHomework && (
+            <div className="form-container" style={{ marginTop: '24px' }}>
+              <h3>Review submissions for: {selectedHomework.title}</h3>
+              {selectedHomework.submissions.length === 0 ? (
+                <p>No submissions available for this assignment.</p>
+              ) : (
+                <div>
+                  {selectedHomework.submissions.map((submission) => (
+                    <div key={submission._id} style={{ border: '1px solid #ccc', padding: '12px', marginBottom: '12px', borderRadius: '6px' }}>
+                      <div><strong>Student:</strong> {submission.student?.firstName ? `${submission.student.firstName} ${submission.student.lastName}` : submission.student?._id || submission.student}</div>
+                      <div><strong>Status:</strong> {submission.status}</div>
+                      <div><strong>Attached File:</strong> {submission.fileName || 'None'}</div>
+                      <div><strong>Student Comments:</strong> {submission.comments || 'None'}</div>
+                      {submission.teacherFeedback && <div><strong>Teacher Feedback:</strong> {submission.teacherFeedback}</div>}
+                      <div style={{ marginTop: '8px' }}>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary"
+                          onClick={() => handleSelectSubmission(submission)}
+                        >
+                          Review This Submission
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedSubmission && (
+                <form onSubmit={handleSubmitReview} style={{ marginTop: '16px' }}>
+                  <h4>Review Submission</h4>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Status</label>
+                      <select name="status" value={reviewData.status} onChange={handleReviewChange}>
+                        <option value="Reviewed">Reviewed</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Pending">Pending</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Teacher Feedback</label>
+                    <textarea
+                      name="teacherFeedback"
+                      value={reviewData.teacherFeedback}
+                      onChange={handleReviewChange}
+                      rows="3"
+                    />
+                  </div>
+                  <button type="submit" className="btn btn-success">Save Review</button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ marginLeft: '10px' }}
+                    onClick={() => setSelectedSubmission(null)}
+                  >
+                    Cancel
+                  </button>
+                  {reviewSuccess && <div className="alert alert-success" style={{ marginTop: '12px' }}>{reviewSuccess}</div>}
+                </form>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

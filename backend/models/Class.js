@@ -30,7 +30,7 @@ const classSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Unique index for grade and section combination
-classSchema.index({ grade: 1, section: 1 }, { unique: true });
+// Allow multiple class records for the same grade/section when they represent different subjects.
+classSchema.index({ grade: 1, section: 1, subject: 1 }, { unique: true });
 
 module.exports = mongoose.model('Class', classSchema);

@@ -12,7 +12,7 @@ const emptyForm = {
   eventType: 'Other',
 };
 
-const EventList = () => {
+const EventList = ({ showActions = true }) => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -54,18 +54,34 @@ const EventList = () => {
     setError('');
     setSuccessMessage('');
 
+    const payload = { ...formData };
+    if (!payload.organizer || payload.organizer.trim() === '') {
+      delete payload.organizer;
+    }
+
+    if (payload.organizer && !/^[0-9a-fA-F]{24}$/.test(payload.organizer)) {
+      setError('Organizer ID must be a valid 24-character MongoDB ObjectId or left empty.');
+      return;
+    }
+
+    if (!payload.eventDate) {
+      setError('Event date is required.');
+      return;
+    }
+
     try {
       if (editingId) {
-        await eventService.update(editingId, formData);
+        await eventService.update(editingId, payload);
         setSuccessMessage('Event updated successfully.');
       } else {
-        await eventService.add(formData);
+        await eventService.add(payload);
         setSuccessMessage('Event added successfully.');
       }
       resetForm();
       fetchEvents();
     } catch (err) {
-      setError('Failed to save event');
+      const serverMessage = err.response?.data?.message;
+      setError(serverMessage ? `Failed to save event: ${serverMessage}` : 'Failed to save event');
       console.error(err);
     }
   };
@@ -102,18 +118,20 @@ const EventList = () => {
     <div className="card">
       <div className="card-header">
         <h2>🎉 School Events</h2>
-        <button className="btn btn-primary" onClick={() => {
-          if (showForm) resetForm();
-          else setShowForm(true);
-        }}>
-          {showForm ? 'Cancel' : '➕ Add Event'}
-        </button>
+        {showActions && (
+          <button className="btn btn-primary" onClick={() => {
+            if (showForm) resetForm();
+            else setShowForm(true);
+          }}>
+            {showForm ? 'Cancel' : '➕ Add Event'}
+          </button>
+        )}
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
       {successMessage && <div className="alert alert-success">{successMessage}</div>}
 
-      {showForm && (
+      {showActions && showForm && (
         <div className="form-container" style={{ marginBottom: '20px' }}>
           <h3>{editingId ? 'Edit Event' : 'Add New Event'}</h3>
           <form onSubmit={handleSubmit}>
@@ -190,7 +208,7 @@ const EventList = () => {
             <tbody>
               {events.length === 0 ? (
                 <tr>
-                  <td colSpan="7">No events available.</td>
+                  <td colSpan={showActions ? 7 : 6}>No events available.</td>
                 </tr>
               ) : (
                 events.map((event) => (
@@ -201,10 +219,14 @@ const EventList = () => {
                     <td>{event.startTime ? `${event.startTime} - ${event.endTime || ''}` : '-'}</td>
                     <td>{event.location || '-'}</td>
                     <td>{event.organizer ? `${event.organizer.firstName || ''} ${event.organizer.lastName || ''}`.trim() || event.organizer._id : '-'}</td>
-                    <td>
-                      <button className="btn btn-sm btn-primary" onClick={() => handleEdit(event)}>Edit</button>{' '}
-                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(event._id)}>Delete</button>
-                    </td>
+                    {showActions && (
+                      <td>
+                        <>
+                          <button className="btn btn-sm btn-primary" onClick={() => handleEdit(event)}>Edit</button>{' '}
+                          <button className="btn btn-sm btn-danger" onClick={() => handleDelete(event._id)}>Delete</button>
+                        </>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}

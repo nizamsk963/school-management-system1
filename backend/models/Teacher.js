@@ -12,6 +12,14 @@ const teacherSchema = new mongoose.Schema(
       ref: 'Subject',
       required: true,
     },
+    teachingSubjects: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Subject',
+    }],
+    isAllSubjectTeacher: {
+      type: Boolean,
+      default: false,
+    },
     assignedClasses: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Class',
@@ -20,6 +28,16 @@ const teacherSchema = new mongoose.Schema(
     experience: Number,
     joinDate: Date,
     salary: Number,
+    designation: {
+      type: String,
+      default: 'Teacher',
+    },
+    bio: String,
+    status: {
+      type: String,
+      enum: ['Active', 'Inactive'],
+      default: 'Active',
+    },
   },
   { timestamps: true }
 );

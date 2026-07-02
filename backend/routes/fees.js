@@ -6,6 +6,7 @@ const roleMiddleware = require('../middleware/roleMiddleware');
 const router = express.Router();
 
 router.get('/', authMiddleware, feeController.getFees);
+router.get('/parent', authMiddleware, feeController.getFeesByParent);
 router.get('/student/:studentId', authMiddleware, feeController.getFeesByStudent);
 router.get('/pending', authMiddleware, feeController.getPendingFees);
 router.post('/', authMiddleware, roleMiddleware(['accountant_admin', 'super_admin', 'principal']), feeController.addFee);

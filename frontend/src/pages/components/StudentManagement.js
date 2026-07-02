@@ -9,6 +9,9 @@ const StudentManagement = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [selectedGrade, setSelectedGrade] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState('');
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -17,6 +20,15 @@ const StudentManagement = () => {
     rollNumber: '',
     classId: '',
     parentId: '',
+    parentUserId: '',
+    parentPassword: '',
+    parentFirstName: '',
+    parentLastName: '',
+    parentEmail: '',
+    parentPhone: '',
+    parentGender: 'Male',
+    parentAddress: '',
+    parentRelationship: '',
     dateOfBirth: '',
     phone: '',
     gender: 'Male',
@@ -30,6 +42,46 @@ const StudentManagement = () => {
     fetchStudents();
     fetchClasses();
   }, []);
+
+  useEffect(() => {
+    if (!classes.length) {
+      setSelectedGrade('');
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+
+    const gradeOptions = [...new Set(classes.map((cls) => String(cls.grade)).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
+    if (selectedGrade && !gradeOptions.includes(String(selectedGrade))) {
+      setSelectedGrade('');
+      setSelectedSection('');
+      setSelectedClassId('');
+    }
+  }, [classes, selectedGrade]);
+
+  useEffect(() => {
+    if (!classes.length || !selectedGrade) {
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+
+    const gradeClasses = classes.filter((cls) => String(cls.grade) === String(selectedGrade));
+    const sections = [...new Set(gradeClasses.map((cls) => cls.section).filter(Boolean))].sort();
+
+    if (!sections.length) {
+      setSelectedSection('');
+      setSelectedClassId('');
+      return;
+    }
+
+    if (!selectedSection || !sections.includes(selectedSection)) {
+      setSelectedSection('');
+    }
+
+    const matchedClass = gradeClasses.find((cls) => String(cls.section) === String(selectedSection || ''));
+    setSelectedClassId(matchedClass?._id || '');
+  }, [classes, selectedGrade, selectedSection]);
 
   const fetchStudents = async () => {
     try {
@@ -67,6 +119,15 @@ const StudentManagement = () => {
       rollNumber: '',
       classId: '',
       parentId: '',
+      parentUserId: '',
+      parentPassword: '',
+      parentFirstName: '',
+      parentLastName: '',
+      parentEmail: '',
+      parentPhone: '',
+      parentGender: 'Male',
+      parentAddress: '',
+      parentRelationship: '',
       dateOfBirth: '',
       phone: '',
       gender: 'Male',
@@ -79,7 +140,7 @@ const StudentManagement = () => {
   const handleSubmitStudent = async (e) => {
     e.preventDefault();
     try {
-      if (!currentUser || !['super_admin', 'principal'].includes(currentUser.role)) {
+      if (!currentUser || !['super_admin', 'principal', 'accountant_admin'].includes(currentUser.role)) {
         setError('You do not have permission to save a student.');
         return;
       }
@@ -110,6 +171,15 @@ const StudentManagement = () => {
       rollNumber: student.rollNumber || '',
       classId: student.class?._id || '',
       parentId: student.parentId?._id || '',
+      parentUserId: student.parentId?.userId || '',
+      parentPassword: '',
+      parentFirstName: student.parentId?.firstName || '',
+      parentLastName: student.parentId?.lastName || '',
+      parentEmail: student.parentId?.email || '',
+      parentPhone: student.parentId?.phone || '',
+      parentGender: student.parentId?.gender || 'Male',
+      parentAddress: student.parentId?.address || '',
+      parentRelationship: student.parentId?.relationship || '',
       dateOfBirth: student.userId?.dateOfBirth ? new Date(student.userId.dateOfBirth).toISOString().slice(0, 10) : '',
       phone: student.userId?.phone || '',
       gender: student.userId?.gender || 'Male',
@@ -128,18 +198,51 @@ const StudentManagement = () => {
     }
   };
 
+  const gradeOptions = [...new Set(classes.map((cls) => String(cls.grade)).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
+  const visibleClasses = classes.filter((cls) => String(cls.grade) === String(selectedGrade));
+  const sectionsForGrade = [...new Set(visibleClasses.map((cls) => cls.section).filter(Boolean))].sort();
+  const visibleStudents = students.filter((student) => {
+    if (!selectedClassId) return true;
+    const studentClassId = student.class?._id || student.class || student.classId;
+    return String(studentClassId) === String(selectedClassId);
+  });
+
   return (
     <div className="card">
       <div className="card-header">
         <h2>👨‍🎓 Student Management</h2>
-        {currentUser && ['super_admin', 'principal'].includes(currentUser.role) && (
-          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-            {showForm ? 'Cancel' : '➕ Add Student'}
-          </button>
-        )}
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
+
+      <div className="form-container" style={{ marginBottom: '20px' }}>
+        <h3>Browse by Grade and Section</h3>
+        <div className="form-row">
+          <div className="form-group">
+            <label>Grade</label>
+            <select value={selectedGrade} onChange={(e) => setSelectedGrade(e.target.value)}>
+              <option value="">Select grade</option>
+              {gradeOptions.map((grade) => (
+                <option key={grade} value={grade}>Grade {grade}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Section</label>
+            <select value={selectedSection} onChange={(e) => setSelectedSection(e.target.value)} disabled={!sectionsForGrade.length}>
+              <option value="">Select section</option>
+              {sectionsForGrade.map((section) => (
+                <option key={section} value={section}>Section {section}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {selectedGrade && selectedSection && (
+          <div className="alert alert-success" style={{ marginTop: '10px' }}>
+            Showing students for Grade {selectedGrade} · Section {selectedSection}
+          </div>
+        )}
+      </div>
 
       {showForm && (
         <div className="form-container" style={{ marginBottom: '30px' }}>
@@ -205,7 +308,7 @@ const StudentManagement = () => {
                 />
               </div>
               <div className="form-group">
-                <label>Class</label>
+                <label>Class / Section</label>
                 <select
                   name="classId"
                   value={formData.classId}
@@ -215,7 +318,7 @@ const StudentManagement = () => {
                   <option value="">Select class</option>
                   {classes.map((cls) => (
                     <option key={cls._id} value={cls._id}>
-                      {`Grade ${cls.grade} ${cls.section}`}
+                      {`Grade ${cls.grade} - Section ${cls.section}`}
                     </option>
                   ))}
                 </select>
@@ -228,6 +331,121 @@ const StudentManagement = () => {
                   type="tel"
                   name="phone"
                   value={formData.phone}
+                  onChange={handleInputChange}
+                />
+              </div>
+            </div>
+
+            <div className="form-divider">
+              <h4>Parent / Guardian Details</h4>
+              <p style={{ marginTop: '8px', color: '#6b7280' }}>
+                If you have an existing parent account, supply the Parent Account ID here. To create a new parent account, fill the parent user details below; leaving Parent User ID blank will auto-generate a parent login.
+              </p>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Existing Parent Account ID</label>
+                <input
+                  type="text"
+                  name="parentId"
+                  value={formData.parentId}
+                  onChange={handleInputChange}
+                  placeholder="Link an existing parent account by ObjectId"
+                />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Parent User ID</label>
+                <input
+                  type="text"
+                  name="parentUserId"
+                  value={formData.parentUserId}
+                  onChange={handleInputChange}
+                  placeholder="Leave blank to auto-generate when creating a new parent"
+                />
+              </div>
+              <div className="form-group">
+                <label>Parent Password</label>
+                <input
+                  type="password"
+                  name="parentPassword"
+                  value={formData.parentPassword}
+                  onChange={handleInputChange}
+                  placeholder="Enter to create/update parent account"
+                />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Parent First Name</label>
+                <input
+                  type="text"
+                  name="parentFirstName"
+                  value={formData.parentFirstName}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="form-group">
+                <label>Parent Last Name</label>
+                <input
+                  type="text"
+                  name="parentLastName"
+                  value={formData.parentLastName}
+                  onChange={handleInputChange}
+                />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Parent Email</label>
+                <input
+                  type="email"
+                  name="parentEmail"
+                  value={formData.parentEmail}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="form-group">
+                <label>Parent Phone</label>
+                <input
+                  type="tel"
+                  name="parentPhone"
+                  value={formData.parentPhone}
+                  onChange={handleInputChange}
+                />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Parent Gender</label>
+                <select
+                  name="parentGender"
+                  value={formData.parentGender}
+                  onChange={handleInputChange}
+                >
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Relationship</label>
+                <input
+                  type="text"
+                  name="parentRelationship"
+                  value={formData.parentRelationship}
+                  onChange={handleInputChange}
+                />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Parent Address</label>
+                <input
+                  type="text"
+                  name="parentAddress"
+                  value={formData.parentAddress}
                   onChange={handleInputChange}
                 />
               </div>
@@ -250,22 +468,24 @@ const StudentManagement = () => {
           <table>
             <thead>
               <tr>
-                <th>First Name</th>
-                <th>Last Name</th>
-                <th>User ID</th>
+                <th>Student Name</th>
+                <th>Admission ID</th>
+                <th>Grade / Section</th>
                 <th>Roll Number</th>
                 <th>Phone</th>
+                <th>Guardian</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {students.map((student) => (
+              {visibleStudents.map((student) => (
                 <tr key={student._id}>
-                  <td>{student.userId?.firstName}</td>
-                  <td>{student.userId?.lastName}</td>
+                  <td>{student.userId?.firstName} {student.userId?.lastName}</td>
                   <td>{student.userId?.userId}</td>
+                  <td>{student.class ? `Grade ${student.class.grade} - Section ${student.class.section}` : 'N/A'}</td>
                   <td>{student.rollNumber}</td>
                   <td>{student.userId?.phone}</td>
+                  <td>{student.parentId?.firstName ? `${student.parentId.firstName} ${student.parentId.lastName}` : 'N/A'}</td>
                   <td>
                     <div className="action-buttons">
                       {currentUser && ['super_admin', 'principal'].includes(currentUser.role) && (
@@ -285,6 +505,14 @@ const StudentManagement = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {currentUser && ['super_admin', 'principal', 'accountant_admin'].includes(currentUser.role) && (
+        <div style={{ marginTop: '16px' }}>
+          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+            {showForm ? 'Cancel' : '➕ Add Student'}
+          </button>
         </div>
       )}
     </div>

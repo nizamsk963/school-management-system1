@@ -27,7 +27,7 @@ const StudentDashboard = ({ user, onLogout }) => {
         const [marks, attendance, homework] = await Promise.all([
           marksService.getByStudent(resolvedStudentId),
           attendanceService.getByStudent(resolvedStudentId),
-          homeworkService.getAll(),
+          homeworkService.getByStudent(resolvedStudentId),
         ]);
         setStats({
           totalMarks: marks.data.length,
@@ -78,10 +78,10 @@ const StudentDashboard = ({ user, onLogout }) => {
           <Route index element={<DashboardHome stats={stats} />} />
           <Route path="marks" element={<StudentMarks userId={studentId} />} />
           <Route path="attendance" element={<StudentAttendance userId={studentId} />} />
-          <Route path="homework" element={<StudentHomework />} />
-          <Route path="exams" element={<ExamList />} />
-          <Route path="events" element={<EventList />} />
-          <Route path="remarks" element={<RemarkList />} />
+          <Route path="homework" element={<StudentHomework userId={studentId} />} />
+          <Route path="exams" element={<ExamList studentId={studentId} showActions={false} />} />
+          <Route path="events" element={<EventList showActions={false} />} />
+          <Route path="remarks" element={<RemarkList studentId={studentId} showActions={false} />} />
         </Routes>
       </div>
     </div>

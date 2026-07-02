@@ -29,6 +29,18 @@ const getPendingFees = async (req, res) => {
   }
 };
 
+const getFeesByParent = async (req, res) => {
+  try {
+    const parentUserId = req.user.userId;
+    const students = await Student.find({ parentId: parentUserId });
+    const studentIds = students.map((student) => student.userId);
+    const fees = await Fee.find({ student: { $in: studentIds } }).populate('student');
+    res.json(fees);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const addFee = async (req, res) => {
   try {
     const fee = new Fee(req.body);
@@ -42,7 +54,8 @@ const addFee = async (req, res) => {
 
 const payFee = async (req, res) => {
   try {
-    const { feeId, paymentMethod, transactionId } = req.body;
+    const { feeId, paymentMethod, transactionId, paymentDetails } = req.body;
+    const resolvedTransactionId = transactionId || `TXN-TEST-${Date.now()}`;
 
     const fee = await Fee.findByIdAndUpdate(
       feeId,
@@ -50,7 +63,8 @@ const payFee = async (req, res) => {
         isPaid: true,
         paymentDate: new Date(),
         paymentMethod,
-        transactionId,
+        transactionId: resolvedTransactionId,
+        paymentDetails: paymentDetails || {},
       },
       { new: true }
     ).populate('student');
@@ -94,6 +108,7 @@ const deleteFee = async (req, res) => {
 module.exports = {
   getFees,
   getFeesByStudent,
+  getFeesByParent,
   getPendingFees,
   addFee,
   payFee,

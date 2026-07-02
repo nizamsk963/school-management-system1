@@ -9,6 +9,7 @@ test('createClass resolves a teacher profile id to a user id for classTeacher', 
   const originalClassFindOne = Class.findOne;
   const originalClassPrototypeSave = Class.prototype.save;
   const originalTeacherFindById = Teacher.findById;
+  const originalTeacherFindByIdAndUpdate = Teacher.findByIdAndUpdate;
   const originalUserFindById = User.findById;
 
   let savedClass = null;
@@ -24,6 +25,7 @@ test('createClass resolves a teacher profile id to a user id for classTeacher', 
       userId: '507f191e810c19729de860eb',
       lean: () => ({ _id: '507f191e810c19729de860ea', userId: '507f191e810c19729de860eb' }),
     });
+    Teacher.findByIdAndUpdate = async () => ({ _id: '507f191e810c19729de860ea' });
     User.findById = async () => ({ _id: '507f191e810c19729de860eb' });
 
     const req = {
@@ -55,7 +57,69 @@ test('createClass resolves a teacher profile id to a user id for classTeacher', 
     Class.findOne = originalClassFindOne;
     Class.prototype.save = originalClassPrototypeSave;
     Teacher.findById = originalTeacherFindById;
+    Teacher.findByIdAndUpdate = originalTeacherFindByIdAndUpdate;
     User.findById = originalUserFindById;
+  }
+});
+
+test('createClass adds the new class to the teacher assignedClasses list', async () => {
+  const originalClassFindOne = Class.findOne;
+  const originalClassPrototypeSave = Class.prototype.save;
+  const originalTeacherFindById = Teacher.findById;
+  const originalTeacherFindByIdAndUpdate = Teacher.findByIdAndUpdate;
+
+  let savedClass = null;
+  let updatedTeacherId = null;
+  let updatePayload = null;
+
+  try {
+    Class.findOne = async () => null;
+    Class.prototype.save = async function () {
+      this._id = 'class-1';
+      savedClass = this;
+      return this;
+    };
+    Teacher.findById = async () => ({
+      _id: 'teacher-profile-id',
+      userId: 'teacher-user-id',
+    });
+    Teacher.findByIdAndUpdate = async (id, payload) => {
+      updatedTeacherId = id;
+      updatePayload = payload;
+      return { _id: id };
+    };
+
+    const req = {
+      body: {
+        grade: '1',
+        section: 'A',
+        classTeacher: 'teacher-1',
+      },
+    };
+
+    const res = {
+      statusCode: null,
+      body: null,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(payload) {
+        this.body = payload;
+        return this;
+      },
+    };
+
+    await classController.createClass(req, res);
+
+    assert.strictEqual(res.statusCode, 201);
+    assert.strictEqual(updatedTeacherId, 'teacher-profile-id');
+    assert.strictEqual(updatePayload.$addToSet.assignedClasses.toString(), savedClass._id.toString());
+  } finally {
+    Class.findOne = originalClassFindOne;
+    Class.prototype.save = originalClassPrototypeSave;
+    Teacher.findById = originalTeacherFindById;
+    Teacher.findByIdAndUpdate = originalTeacherFindByIdAndUpdate;
   }
 });
 
@@ -140,14 +204,20 @@ test('createClass returns an existing class when the normalized class already ex
 });
 
 test('deleteClass removes a class by id', async () => {
+  const originalClassFindById = Class.findById;
   const originalClassFindByIdAndDelete = Class.findByIdAndDelete;
+  const originalTeacherFindOne = Teacher.findOne;
+  const originalTeacherFindByIdAndUpdate = Teacher.findByIdAndUpdate;
 
   try {
     let deletedId = null;
+    Class.findById = async () => ({ _id: 'class-1', grade: 1, section: 'A', classTeacher: 'teacher-user-id' });
     Class.findByIdAndDelete = async (id) => {
       deletedId = id;
       return { _id: id, grade: 1, section: 'A' };
     };
+    Teacher.findOne = async () => ({ _id: 'teacher-profile-id' });
+    Teacher.findByIdAndUpdate = async () => ({ _id: 'teacher-profile-id' });
 
     const req = {
       params: {
@@ -174,6 +244,9 @@ test('deleteClass removes a class by id', async () => {
     assert.strictEqual(res.statusCode, 200);
     assert.strictEqual(res.body.message, 'Class deleted successfully');
   } finally {
+    Class.findById = originalClassFindById;
     Class.findByIdAndDelete = originalClassFindByIdAndDelete;
+    Teacher.findOne = originalTeacherFindOne;
+    Teacher.findByIdAndUpdate = originalTeacherFindByIdAndUpdate;
   }
 });

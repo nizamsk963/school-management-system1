@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Teacher = require('../models/Teacher');
 const Subject = require('../models/Subject');
@@ -28,11 +29,54 @@ const generateTeacherUserId = async () => {
   return generatedId;
 };
 
+const normalizeTeacherEmail = (email) => {
+  if (typeof email !== 'string') {
+    return undefined;
+  }
+
+  const trimmedEmail = email.trim().toLowerCase();
+  return trimmedEmail || undefined;
+};
+
+const resolveTeacherEmail = async (email, firstName, lastName, fallbackUserId) => {
+  const normalizedEmail = normalizeTeacherEmail(email);
+  if (normalizedEmail) {
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (!existingUser) {
+      return normalizedEmail;
+    }
+  }
+
+  const baseName = `${(firstName || 'teacher').toLowerCase().replace(/[^a-z0-9]+/g, '')}.${(lastName || 'user').toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
+  const suffix = Math.random().toString(36).slice(2, 7);
+  const generatedEmail = `${baseName}${fallbackUserId ? `.${fallbackUserId}` : ''}${suffix}@school.com`;
+  const existingUser = await User.findOne({ email: generatedEmail });
+  if (!existingUser) {
+    return generatedEmail;
+  }
+
+  return `${baseName}${suffix}${Math.random().toString(36).slice(2, 7)}@school.com`;
+};
+
+const resolveTeacherSubject = async (subject) => {
+  if (subject) {
+    return subject;
+  }
+
+  const fallbackSubject = await Subject.findOne();
+  if (!fallbackSubject) {
+    throw new Error('No subject available for teacher assignment');
+  }
+
+  return fallbackSubject._id;
+};
+
 const getTeachers = async (req, res) => {
   try {
     const teachers = await Teacher.find()
       .populate('userId')
       .populate('subject')
+      .populate('teachingSubjects')
       .populate('assignedClasses');
     res.json(teachers);
   } catch (error) {
@@ -45,6 +89,7 @@ const getTeacherById = async (req, res) => {
     const teacher = await Teacher.findById(req.params.id)
       .populate('userId')
       .populate('subject')
+      .populate('teachingSubjects')
       .populate('assignedClasses');
     if (!teacher) {
       return res.status(404).json({ message: 'Teacher not found' });
@@ -55,9 +100,43 @@ const getTeacherById = async (req, res) => {
   }
 };
 
+const getTeacherByUserId = async (req, res) => {
+  try {
+    const userIdParam = req.params.userId;
+    let teacher;
+
+    if (mongoose.Types.ObjectId.isValid(userIdParam)) {
+      teacher = await Teacher.findOne({ userId: userIdParam })
+        .populate('userId')
+        .populate('subject')
+        .populate('teachingSubjects')
+        .populate('assignedClasses');
+    }
+
+    if (!teacher) {
+      const user = await User.findOne({ userId: userIdParam });
+      if (user) {
+        teacher = await Teacher.findOne({ userId: user._id })
+          .populate('userId')
+          .populate('subject')
+          .populate('teachingSubjects')
+          .populate('assignedClasses');
+      }
+    }
+
+    if (!teacher) {
+      return res.status(404).json({ message: 'Teacher not found for this user' });
+    }
+
+    res.json(teacher);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const addTeacher = async (req, res) => {
   try {
-    const { firstName, lastName, userId, password, subject, assignedClasses, qualifications, experience, joinDate, phone, gender, email } = req.body;
+    const { firstName, lastName, userId, password, subject, assignedClasses, qualifications, experience, joinDate, phone, gender, email, isAllSubjectTeacher, teachingSubjects, salary, designation, bio, status } = req.body;
 
     let finalUserId = userId?.trim();
     if (finalUserId) {
@@ -69,23 +148,20 @@ const addTeacher = async (req, res) => {
       finalUserId = await generateTeacherUserId();
     }
 
-    if (email) {
-      const existingEmailUser = await User.findOne({ email });
-      if (existingEmailUser) {
-        return res.status(400).json({ message: 'Email already exists' });
-      }
-    }
+    const normalizedEmail = await resolveTeacherEmail(email, firstName, lastName, finalUserId);
+    const resolvedSubject = await resolveTeacherSubject(subject);
+    const safePassword = password || 'Teacher@123';
 
     // Create user
     const user = new User({
       userId: finalUserId,
-      password,
+      password: safePassword,
       role: 'teacher',
       firstName,
       lastName,
       phone,
       gender,
-      email,
+      email: normalizedEmail,
     });
 
     await user.save();
@@ -93,11 +169,19 @@ const addTeacher = async (req, res) => {
     // Create teacher
     const teacher = new Teacher({
       userId: user._id,
-      subject,
-      assignedClasses: assignedClasses || [],
+      subject: resolvedSubject,
+      teachingSubjects: Array.isArray(teachingSubjects) && teachingSubjects.length
+        ? teachingSubjects
+        : (Boolean(isAllSubjectTeacher) ? [] : [resolvedSubject]),
+      isAllSubjectTeacher: Boolean(isAllSubjectTeacher),
+      assignedClasses: Array.isArray(assignedClasses) ? assignedClasses : [],
       qualifications,
       experience,
       joinDate,
+      salary,
+      designation,
+      bio,
+      status,
     });
 
     await teacher.save();
@@ -119,7 +203,7 @@ const addTeacher = async (req, res) => {
 
 const updateTeacher = async (req, res) => {
   try {
-    const { firstName, lastName, password, email, phone, gender, subject, qualifications, experience, joinDate, assignedClasses } = req.body;
+    const { firstName, lastName, password, email, phone, gender, subject, qualifications, experience, joinDate, assignedClasses, isAllSubjectTeacher, teachingSubjects, salary, designation, bio, status } = req.body;
 
     const teacher = await Teacher.findById(req.params.id);
     if (!teacher) {
@@ -127,10 +211,16 @@ const updateTeacher = async (req, res) => {
     }
 
     if (subject !== undefined) teacher.subject = subject;
+    if (teachingSubjects !== undefined) teacher.teachingSubjects = teachingSubjects;
+    if (isAllSubjectTeacher !== undefined) teacher.isAllSubjectTeacher = Boolean(isAllSubjectTeacher);
     if (qualifications !== undefined) teacher.qualifications = qualifications;
     if (experience !== undefined) teacher.experience = experience;
     if (joinDate !== undefined) teacher.joinDate = joinDate;
     if (assignedClasses !== undefined) teacher.assignedClasses = assignedClasses;
+    if (salary !== undefined) teacher.salary = salary;
+    if (designation !== undefined) teacher.designation = designation;
+    if (bio !== undefined) teacher.bio = bio;
+    if (status !== undefined) teacher.status = status;
 
     await teacher.save();
 
@@ -148,6 +238,7 @@ const updateTeacher = async (req, res) => {
     const updatedTeacher = await Teacher.findById(req.params.id)
       .populate('userId')
       .populate('subject')
+      .populate('teachingSubjects')
       .populate('assignedClasses');
     res.json(updatedTeacher);
   } catch (error) {
@@ -184,6 +275,7 @@ const assignClassToTeacher = async (req, res) => {
 module.exports = {
   getTeachers,
   getTeacherById,
+  getTeacherByUserId,
   addTeacher,
   updateTeacher,
   deleteTeacher,

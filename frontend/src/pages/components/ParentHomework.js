@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { homeworkService } from '../../services/api';
+import { homeworkService, studentService } from '../../services/api';
 
 const ParentHomework = () => {
   const [homework, setHomework] = useState([]);
@@ -10,8 +10,18 @@ const ParentHomework = () => {
     const fetchHomework = async () => {
       try {
         setLoading(true);
-        const response = await homeworkService.getAll();
-        setHomework(response.data);
+        const studentResponse = await studentService.getByParent();
+        const students = studentResponse.data || [];
+        const homeworkItems = [];
+
+        for (const student of students) {
+          const classId = student.class?._id || student.class;
+          if (!classId) continue;
+          const response = await homeworkService.getByClass(classId);
+          homeworkItems.push(...(response.data || []).map((item) => ({ ...item, student })));
+        }
+
+        setHomework(homeworkItems);
       } catch (err) {
         setError('Failed to load homework');
         console.error(err);

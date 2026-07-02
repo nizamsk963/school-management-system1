@@ -23,9 +23,22 @@ const feeSchema = new mongoose.Schema(
     paymentDate: Date,
     paymentMethod: {
       type: String,
-      enum: ['PhonePe', 'Credit Card', 'Debit Card', 'Cash', 'Cheque'],
+      enum: ['PhonePe', 'Credit Card', 'Debit Card', 'Cash', 'Cheque', 'Net Banking', 'UPI', 'Wallet'],
     },
     transactionId: String,
+    paymentDetails: {
+      phonePeId: String,
+      cardHolderName: String,
+      cardLast4: String,
+      cardNetwork: String,
+      chequeNumber: String,
+      chequeBank: String,
+      chequeDate: Date,
+      chequeStatus: String,
+      cashReceiptId: String,
+      cashCounter: String,
+      additionalInfo: String,
+    },
     remarks: String,
   },
   { timestamps: true }

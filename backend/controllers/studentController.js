@@ -30,18 +30,59 @@ const getStudentById = async (req, res) => {
   }
 };
 
+const getStudentByUserId = async (req, res) => {
+  try {
+    const userIdParam = req.params.userId;
+
+    let student = await Student.findOne({ userId: userIdParam })
+      .populate('userId')
+      .populate('class')
+      .populate('parentId');
+
+    if (!student) {
+      const user = await User.findOne({ userId: userIdParam });
+      if (user) {
+        student = await Student.findOne({ userId: user._id })
+          .populate('userId')
+          .populate('class')
+          .populate('parentId');
+      }
+    }
+
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+    res.json(student);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const addStudent = async (req, res) => {
   try {
-    const { firstName, lastName, userId, password, rollNumber, classId, parentId, dateOfBirth, phone, gender, admissionDate } = req.body;
-
-    if (!classId) {
-      return res.status(400).json({ message: 'Class selection is required' });
-    }
-
-    const classData = await Class.findById(classId);
-    if (!classData) {
-      return res.status(400).json({ message: 'Selected class does not exist' });
-    }
+    const {
+      firstName,
+      lastName,
+      userId,
+      password,
+      rollNumber,
+      classId,
+      parentId,
+      parentUserId,
+      parentPassword,
+      parentFirstName,
+      parentLastName,
+      parentEmail,
+      parentPhone,
+      parentGender,
+      parentAddress,
+      parentRelationship,
+      dateOfBirth,
+      phone,
+      gender,
+      email,
+      admissionDate,
+    } = req.body;
 
     const existingUser = await User.findOne({ userId });
     const existingStudent = await Student.findOne({ rollNumber });
@@ -84,9 +125,57 @@ const addStudent = async (req, res) => {
       await user.save();
     }
 
-    // Sanitize parentId: only set if non-empty and a valid ObjectId
     let parent = undefined;
-    if (parentId && typeof parentId === 'string' && parentId.trim() !== '') {
+
+    // Automatically generate a parent login when parent details are provided.
+    if (!parentUserId && (parentFirstName || parentLastName || parentEmail || parentPhone || parentAddress || parentRelationship)) {
+      parentUserId = `PAR-${rollNumber}`;
+    }
+    if (parentUserId && !parentPassword) {
+      parentPassword = 'Parent@123';
+    }
+
+    // Prefer an existing or newly created parent user, or accept a parent ObjectId.
+    if (parentUserId || parentPassword) {
+      if (!parentUserId || !parentPassword) {
+        return res.status(400).json({ message: 'Both Parent User ID and Parent Password are required when creating a parent account.' });
+      }
+
+      const existingParentUser = await User.findOne({ userId: parentUserId });
+      if (existingParentUser) {
+        if (existingParentUser.role !== 'parent') {
+          return res.status(400).json({ message: `Specified parent user ID '${parentUserId}' is already in use.` });
+        }
+        if (parentFirstName) existingParentUser.firstName = parentFirstName;
+        if (parentLastName) existingParentUser.lastName = parentLastName;
+        if (parentEmail) existingParentUser.email = parentEmail;
+        if (parentPhone) existingParentUser.phone = parentPhone;
+        if (parentGender) existingParentUser.gender = parentGender;
+        if (parentAddress) existingParentUser.address = parentAddress;
+        if (parentRelationship) existingParentUser.relationship = parentRelationship;
+        await existingParentUser.save();
+        parent = existingParentUser._id;
+      } else {
+        if (!parentFirstName || !parentLastName) {
+          return res.status(400).json({ message: 'Parent first name and last name are required when creating a new parent account.' });
+        }
+
+        const parentUser = new User({
+          userId: parentUserId,
+          password: parentPassword,
+          role: 'parent',
+          firstName: parentFirstName,
+          lastName: parentLastName,
+          email: parentEmail,
+          phone: parentPhone,
+          gender: parentGender,
+          address: parentAddress,
+          relationship: parentRelationship,
+        });
+        await parentUser.save();
+        parent = parentUser._id;
+      }
+    } else if (parentId && typeof parentId === 'string' && parentId.trim() !== '') {
       if (!mongoose.Types.ObjectId.isValid(parentId)) {
         return res.status(400).json({ message: 'Invalid parentId provided' });
       }
@@ -121,7 +210,26 @@ const addStudent = async (req, res) => {
 
 const updateStudent = async (req, res) => {
   try {
-    const { classId, parentId, firstName, lastName, password, phone, gender, dateOfBirth, email } = req.body;
+    const {
+      classId,
+      parentId,
+      parentUserId,
+      parentPassword,
+      parentFirstName,
+      parentLastName,
+      parentEmail,
+      parentPhone,
+      parentGender,
+      parentAddress,
+      parentRelationship,
+      firstName,
+      lastName,
+      password,
+      phone,
+      gender,
+      dateOfBirth,
+      email,
+    } = req.body;
 
     const student = await Student.findById(req.params.id);
     if (!student) {
@@ -132,16 +240,58 @@ const updateStudent = async (req, res) => {
       student.class = classId;
     }
 
+    let parentObjectId = student.parentId;
+
     if (Object.prototype.hasOwnProperty.call(req.body, 'parentId')) {
       if (!parentId || (typeof parentId === 'string' && parentId.trim() === '')) {
-        student.parentId = undefined;
+        parentObjectId = undefined;
       } else if (!mongoose.Types.ObjectId.isValid(parentId)) {
         return res.status(400).json({ message: 'Invalid parentId provided' });
       } else {
-        student.parentId = parentId;
+        parentObjectId = parentId;
       }
     }
 
+    if (parentUserId) {
+      const existingParentUser = await User.findOne({ userId: parentUserId });
+      if (existingParentUser && existingParentUser.role !== 'parent') {
+        return res.status(400).json({ message: `Parent User ID '${parentUserId}' is already in use by another role.` });
+      }
+
+      if (existingParentUser) {
+        if (parentFirstName !== undefined) existingParentUser.firstName = parentFirstName;
+        if (parentLastName !== undefined) existingParentUser.lastName = parentLastName;
+        if (parentEmail !== undefined) existingParentUser.email = parentEmail;
+        if (parentPhone !== undefined) existingParentUser.phone = parentPhone;
+        if (parentGender !== undefined) existingParentUser.gender = parentGender;
+        if (parentAddress !== undefined) existingParentUser.address = parentAddress;
+        if (parentRelationship !== undefined) existingParentUser.relationship = parentRelationship;
+        if (parentPassword) existingParentUser.password = parentPassword;
+        await existingParentUser.save();
+        parentObjectId = existingParentUser._id;
+      } else {
+        if (!parentFirstName || !parentLastName) {
+          return res.status(400).json({ message: 'Parent first name and last name are required when creating a new parent account.' });
+        }
+
+        const newParent = new User({
+          userId: parentUserId,
+          password: parentPassword || 'Parent@123',
+          role: 'parent',
+          firstName: parentFirstName,
+          lastName: parentLastName,
+          email: parentEmail,
+          phone: parentPhone,
+          gender: parentGender,
+          address: parentAddress,
+          relationship: parentRelationship,
+        });
+        await newParent.save();
+        parentObjectId = newParent._id;
+      }
+    }
+
+    student.parentId = parentObjectId;
     await student.save();
 
     const user = await User.findById(student.userId);
@@ -179,6 +329,20 @@ const deleteStudent = async (req, res) => {
   }
 };
 
+const getStudentByParent = async (req, res) => {
+  try {
+    const parentUserId = req.user.userId;
+    const students = await Student.find({ parentId: parentUserId })
+      .populate('userId')
+      .populate('class')
+      .populate('parentId');
+
+    res.json(students);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const getStudentsByClass = async (req, res) => {
   try {
     const classId = req.params.classId;
@@ -195,8 +359,10 @@ const getStudentsByClass = async (req, res) => {
 module.exports = {
   getStudents,
   getStudentById,
+  getStudentByUserId,
   addStudent,
   updateStudent,
   deleteStudent,
+  getStudentByParent,
   getStudentsByClass,
 };

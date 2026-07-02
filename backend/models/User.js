@@ -38,6 +38,7 @@ const userSchema = new mongoose.Schema(
     },
     dateOfBirth: Date,
     address: String,
+    relationship: String,
     profileImage: String,
     isActive: {
       type: Boolean,

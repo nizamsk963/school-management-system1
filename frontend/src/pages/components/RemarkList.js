@@ -3,7 +3,7 @@ import { remarkService, teacherService, studentService, classService } from '../
 
 const getId = (value) => value?._id?.toString?.() || value?.toString?.() || '';
 
-const RemarkList = ({ teacherUserId }) => {
+const RemarkList = ({ teacherUserId, studentId, showActions = true }) => {
   const [remarks, setRemarks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -24,23 +24,30 @@ const RemarkList = ({ teacherUserId }) => {
   const fetchRemarks = useCallback(async (parsedUser) => {
     try {
       setLoading(true);
-      const response = await remarkService.getAll();
-      let remarksData = response.data || [];
+      let remarksData = [];
 
-      const normalizedId = (teacherUserId || parsedUser?.id || parsedUser?.userId)?.toString?.() || '';
-      if (normalizedId) {
-        const teachersResponse = await teacherService.getAll();
-        const teachers = teachersResponse.data || [];
-        const teacher = teachers.find((teacher) => {
-          const teacherUser = teacher.userId;
-          const teacherObjId = teacherUser?._id?.toString?.() || teacherUser?.toString?.();
-          const teacherLoginId = teacherUser?.userId;
-          return teacherObjId === normalizedId || teacherUser === normalizedId || teacherLoginId === normalizedId;
-        });
+      if (studentId) {
+        const response = await remarkService.getByStudent(studentId);
+        remarksData = response.data || [];
+      } else {
+        const response = await remarkService.getAll();
+        remarksData = response.data || [];
 
-        if (teacher?.assignedClasses?.length) {
-          const classIds = teacher.assignedClasses.map((cls) => getId(cls));
-          remarksData = remarksData.filter((remark) => classIds.includes(getId(remark.class)));
+        const normalizedId = (teacherUserId || parsedUser?.id || parsedUser?.userId)?.toString?.() || '';
+        if (normalizedId) {
+          const teachersResponse = await teacherService.getAll();
+          const teachers = teachersResponse.data || [];
+          const teacher = teachers.find((teacher) => {
+            const teacherUser = teacher.userId;
+            const teacherObjId = teacherUser?._id?.toString?.() || teacherUser?.toString?.();
+            const teacherLoginId = teacherUser?.userId;
+            return teacherObjId === normalizedId || teacherUser === normalizedId || teacherLoginId === normalizedId;
+          });
+
+          if (teacher?.assignedClasses?.length) {
+            const classIds = teacher.assignedClasses.map((cls) => getId(cls));
+            remarksData = remarksData.filter((remark) => classIds.includes(getId(remark.class)));
+          }
         }
       }
 
@@ -51,7 +58,7 @@ const RemarkList = ({ teacherUserId }) => {
     } finally {
       setLoading(false);
     }
-  }, [teacherUserId]);
+  }, [teacherUserId, studentId]);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -62,7 +69,9 @@ const RemarkList = ({ teacherUserId }) => {
 
     const loadData = async () => {
       await fetchRemarks(parsedUser);
-      await loadTeacherData(parsedUser);
+      if (!studentId) {
+        await loadTeacherData(parsedUser);
+      }
     };
 
     const loadTeacherData = async (parsedUser) => {
@@ -132,15 +141,16 @@ const RemarkList = ({ teacherUserId }) => {
     <div className="card">
       <div className="card-header">
         <h2>💬 Remarks</h2>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : '➕ Add Remark'}
-        </button>
+          {showActions && (
+            <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+              {showForm ? 'Cancel' : '➕ Add Remark'}
+            </button>
+          )}
       </div>
-
       {error && <div className="alert alert-error">{error}</div>}
       {successMessage && <div className="alert alert-success">{successMessage}</div>}
 
-      {showForm && (
+      {showActions && showForm && (
         <div className="form-container" style={{ marginBottom: '20px' }}>
           <h3>Add Remark</h3>
           <form onSubmit={handleAddRemark}>
